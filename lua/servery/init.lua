@@ -286,19 +286,64 @@ M.list_servers = function()
 	return vim.tbl_map(get_server_info, out)
 end
 
+---Resolve a `dirs` entry into the directories it stands for.
+---
+---A plain path is used as-is; shorthands like `~` are expanded when the session
+---is created. A trailing `/*` stands for the git repositories directly below
+---the path, `/**` for those anywhere below it. Patterns are resolved every time
+---the ui is shown, so freshly cloned repositories show up without a restart.
+---@param dir string
+---@return string[]
+M.resolve_dir = function(dir)
+	local base, stars = dir:match("^(.-)/(%*+)$")
+
+	if base then
+		base = vim.fs.normalize(base)
+		if #stars == 1 then
+			return utils.git_repos(utils.child_dirs(base), 0)
+		end
+		return utils.git_repos({ base }, math.huge)
+	end
+
+	if dir:find("[%*%?%[]") then
+		vim.notify(
+			string.format("[Servery] Only a trailing '/*' or '/**' is supported in a dir pattern, got '%s'", dir),
+			vim.log.levels.WARN
+		)
+	end
+
+	return { dir }
+end
+
 ---@return servery.PickerItem[]
 M.list_dirs = function()
 	local cfg = M.get_cfg()
 	local dirs = type(cfg.dirs) == "table" and cfg.dirs or cfg.dirs()
-	return vim.tbl_map(PickerItem.new, dirs)
+
+	local out = {}
+	for _, dir in ipairs(dirs) do
+		vim.list_extend(out, vim.tbl_map(PickerItem.new, M.resolve_dir(dir)))
+	end
+	return out
 end
 
 ---@return servery.PickerItem[]
 M.get_picker_items = function()
 	local items = M.list_servers()
 
-	for _, dir in ipairs(M.list_dirs()) do
-		table.insert(items, dir)
+	-- a directory a session is already in shows up as that session, so only
+	-- add it if it isn't listed already
+	local seen = {}
+	for _, item in ipairs(items) do
+		seen[vim.fs.normalize(item.cwd)] = true
+	end
+
+	for _, item in ipairs(M.list_dirs()) do
+		local cwd = vim.fs.normalize(item.cwd)
+		if not seen[cwd] then
+			seen[cwd] = true
+			table.insert(items, item)
+		end
 	end
 
 	table.sort(items, function(a, b)

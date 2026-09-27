@@ -45,7 +45,10 @@ vim.pack.add({ "https://github.com/wurli/servery.nvim" })
 -- but you probably should at least set `dirs` and `ui.provider`.
 require("servery").setup({
 	-- Either supply the directories as an array of strings, or a function
-	-- which returns an array. Shorthands like `~` are expanded.
+	-- which returns an array. Shorthands like `~` are expanded. A path ending
+	-- in `/*` expands to the git repositories directly below it, and one ending
+	-- in `/**` to the git repositories anywhere below it, e.g.
+	-- { "~/Github/**" }.
 	dirs = { "~" }, ---@type string[] | fun(): string[]
 	session_dir = vim.fs.joinpath(vim.fn.stdpath("cache"), "servery.nvim"),
 	ui = {
